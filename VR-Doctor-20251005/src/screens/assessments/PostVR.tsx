@@ -19,7 +19,7 @@ interface AssessmentQuestion {
   AssessmentTitle: string;
   StudyId: string;
   AssignmentQuestion: string;
-  Type: string; // "Post" only 
+  Type: string; //Post type
   SortKey: number;
   Status: number;
   CreatedBy: string;
