@@ -729,7 +729,7 @@ const StudyObservation = () => {
             {label}
           </Text>
           {isRequired && (
-            <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+             <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 5 }}>
               *
             </Text>
           )}
@@ -755,7 +755,7 @@ const StudyObservation = () => {
             {label}
           </Text>
           {isRequired && (
-            <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+             <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
               *
             </Text>
           )}
@@ -782,7 +782,7 @@ const StudyObservation = () => {
           >
             Patient Response During Session
           </Text>
-          <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+           <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
             *
           </Text>
         </View>
@@ -1044,7 +1044,7 @@ const StudyObservation = () => {
           {yesNoStates['SOFID-24'] === 'Yes' && renderTextField('SOFID-25', 'If Yes, explain assistance provided (optional)', undefined, true)}
           {renderYesNoField('SOFID-26', 'Any deviations from protocol?')}
           {yesNoStates['SOFID-26'] === 'Yes' && renderTextField('SOFID-27', 'If Yes, explain protocol deviations (optional)', undefined, true)}
-          {renderTextField('SOFID-28', 'Other Observations', undefined, true)}
+          {renderTextField('SOFID-28', 'Other Observations (optional)', undefined, true)}
           <View style={{ height: 150 }} />
         </FormCard>
 

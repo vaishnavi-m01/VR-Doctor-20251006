@@ -493,7 +493,7 @@ export default function ExitInterview() {
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1, backgroundColor: '#f5f7f6', paddingVertical: 2, paddingHorizontal: 20 }} keyboardShouldPersistTaps="handled">
+     <ScrollView className="flex-1 p-4 bg-bg pb-[400px]" style={{ paddingTop: 5 }} keyboardShouldPersistTaps="handled">
         {/* Acknowledgment card */}
         <FormCard icon="E" title="Exit Interview">
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 6 }}>
@@ -510,7 +510,7 @@ export default function ExitInterview() {
                 <Text style={{ color: '#2c4a43', fontSize: 14, fontWeight: '500', marginBottom: 2 }}>
                   Interview Date
                 </Text>
-                <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+                 <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 0 }}>
                   *
                 </Text>
               </View>
@@ -535,7 +535,7 @@ export default function ExitInterview() {
                     {group.QuestionText}
                   </Text>
                   {qid !== 'EIQID-2' && (
-                    <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                     <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                       *
                     </Text>
                   )}
@@ -589,7 +589,7 @@ export default function ExitInterview() {
                       {group.QuestionText}
                     </Text>
                     {qid !== 'EIQID-2' && (
-                      <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                      <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                         *
                       </Text>
                     )}
@@ -650,7 +650,7 @@ export default function ExitInterview() {
               <Text className="text-md font-medium  mb-2 text-[#2c4a43]" style={errorLabelStyle('training')}>
                 {questions.find((q) => q.QuestionId === 'EIQID-6')?.QuestionText || ''}
               </Text>
-              <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+              <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                 *
               </Text>
             </View>
@@ -712,7 +712,7 @@ export default function ExitInterview() {
             <Text className="text-sm" style={[errorLabelStyle('technicalIssues'), { marginTop: 12 }]}>
               {questions.find((q) => q.QuestionId === 'EIQID-5')?.QuestionText || ''}
             </Text>
-            <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+            <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
               *
             </Text>
           </View>
@@ -851,7 +851,7 @@ export default function ExitInterview() {
                 <Text className="text-md font-medium text-[#2c4a43]" style={errorLabelStyle('future')}>
                   {questions.find((q) => q.QuestionId === 'EIQID-9')?.QuestionText || ''}
                 </Text>
-                <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+               <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                   *
                 </Text>
               </View>
@@ -903,7 +903,7 @@ export default function ExitInterview() {
                 <Text className="text-sm" style={errorLabelStyle('updates')}>
                   {questions.find((q) => q.QuestionId === 'EIQID-11')?.QuestionText || ''}
                 </Text>
-                <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+                <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                   *
                 </Text>
               </View>
@@ -959,6 +959,7 @@ export default function ExitInterview() {
               onChangeText={setFieldAndClearError('studySuggestions', setStudySuggestions)}
             />
           </View>
+          
         </FormCard>
 
       </ScrollView>

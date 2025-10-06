@@ -766,7 +766,7 @@ export default function AdverseEventForm() {
                                     <Text style={{ color: '#2c4a43', fontSize: 14, fontWeight: '500' }}>
                                         Description (symptoms, severity)
                                     </Text>
-                                    <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+                                     <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 3 }}>
                                         *
                                     </Text>
                                 </View>
@@ -789,7 +789,7 @@ export default function AdverseEventForm() {
                                 >
                                     VR session in progress?
                                 </Text>
-                                <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                                <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                                     *
                                 </Text>
                             </View>
@@ -833,7 +833,7 @@ export default function AdverseEventForm() {
                                     <Text style={{ color: '#2c4a43', fontSize: 14, fontWeight: '500' }}>
                                         VR Content Type at AE
                                     </Text>
-                                    <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+                                      <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 6 }}>
                                         *
                                     </Text>
                                 </View>
@@ -858,7 +858,7 @@ export default function AdverseEventForm() {
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                             <Text className={`text-md font-medium mb-2 ${errors.guidance && !guidance ? "text-red-500" : "text-[#2c4a43]"
                                 }`}>Was the Session Interrupted?</Text>
-                            <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                              <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                                 *
                             </Text>
                         </View>
@@ -905,7 +905,7 @@ export default function AdverseEventForm() {
                         >
                             AE Severity Level (Check One):
                         </Text>
-                        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                          <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 7 }}>
                             *
                         </Text>
                     </View>
@@ -948,7 +948,7 @@ export default function AdverseEventForm() {
                         >
                             Outcome of AE:
                         </Text>
-                        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                             *
                         </Text>
                     </View>
@@ -987,7 +987,7 @@ export default function AdverseEventForm() {
                         >
                             Immediate Action Taken (Check all that apply):
                         </Text>
-                        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                          <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 5 }}>
                             *
                         </Text>
                     </View>
@@ -1020,7 +1020,7 @@ export default function AdverseEventForm() {
                                         <Text style={{ color: '#2c4a43', fontSize: 14, fontWeight: '500' }}>
                                             Physician name
                                         </Text>
-                                        <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+                                         <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom:0 }}>
                                             *
                                         </Text>
                                     </View>
@@ -1044,7 +1044,7 @@ export default function AdverseEventForm() {
                         >
                             AE related to VR use?
                         </Text>
-                        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                             *
                         </Text>
                     </View>
@@ -1075,7 +1075,7 @@ export default function AdverseEventForm() {
                             >
                                 Pre-existing condition contribution?
                             </Text>
-                            <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                            <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                                 *
                             </Text>
                         </View>
@@ -1144,7 +1144,7 @@ export default function AdverseEventForm() {
                                         <Text style={{ color: '#2c4a43', fontSize: 14, fontWeight: '500' }}>
                                             Participant status during follow-up
                                         </Text>
-                                        <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>
+                                         <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 0 }}>
                                             *
                                         </Text>
                                     </View>

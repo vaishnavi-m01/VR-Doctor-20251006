@@ -309,12 +309,19 @@ export default function PostVR() {
 
     return (
       <View key={questionId} className="mt-3">
-        <Text  className={`text-md font-medium  mb-2 ${
-          hasError ? 'text-red-600 font-semibold' : 'text-[#2c4a43]'
-          }`}
-        >
-          {question.AssessmentTitle}
-        </Text>
+         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+          <Text  className={`text-md font-medium  mb-2 ${
+            hasError ? 'text-red-600 font-semibold' : 'text-[#2c4a43]'
+            }`}
+          >
+            {question.AssessmentTitle}
+          </Text>
+
+         <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
+            *
+          </Text>
+        </View>
+
         <Text className="text-base text-gray-600 mb-2">{question.AssignmentQuestion}</Text>
 
         {questionType === 'scale_5' && renderScale(questionId, 5, index)}
@@ -597,7 +604,6 @@ export default function PostVR() {
       </ScrollView>
 
       <BottomBar>
-        <Btn variant="light" onPress={handleValidate}>Validate</Btn>
         <Btn variant="light" onPress={handleClear}>Clear</Btn>
         <Btn onPress={handleSave} disabled={saving || loading}>{saving ? 'Saving...' : 'Save & Close'}</Btn>
       </BottomBar>

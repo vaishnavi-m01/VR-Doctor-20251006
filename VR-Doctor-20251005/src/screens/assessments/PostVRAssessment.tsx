@@ -478,7 +478,7 @@ export default function PostVRAssessment() {
                     >
                       {q.QuestionName}
                     </Text>
-                    <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>
+                    <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 5, marginBottom: 9 }}>
                       *
                     </Text>
                   </View>

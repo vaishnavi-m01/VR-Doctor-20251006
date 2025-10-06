@@ -295,7 +295,7 @@ export default function ParticipantInfo({ patientId = 1, age = 0, studyId = 1 }:
                 ? 'bg-gray-100 border-gray-300' 
                 : 'bg-green-100 border-green-600'
             }`}
-            style={{ width: 100 }}
+            // style={{ width: 100 }}
           >
             <Text className={`text-center font-bold text-base ${
               isLoading || isLoadingNotes ? 'text-gray-400' : 'text-green-600'
