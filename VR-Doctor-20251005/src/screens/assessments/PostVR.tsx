@@ -1,721 +1,606 @@
-import React, { useContext, useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  ScrollView,
-  Pressable,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { RouteProp, useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../Navigation/types';
-import BottomBar from '../../components/BottomBar';
-import { Btn } from '../../components/Button';
-import FormCard from '../../components/FormCard';
+import React, { useState, useEffect, useContext } from 'react';
+import { View, Text, ScrollView, Pressable, ActivityIndicator } from 'react-native';
+import FormCard from '@components/FormCard';
+import { Field } from '@components/Field';
+import DateField from '@components/DateField';
+import BottomBar from '@components/BottomBar';
+import { Btn } from '@components/Button';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../Navigation/types';
 import { apiService } from 'src/services';
 import Toast from 'react-native-toast-message';
 import { UserContext } from 'src/store/context/UserContext';
-import { formatDate } from 'src/utils/formUtils';
-import { formatDateDDMMYYYY } from 'src/utils/date';
-import DateField from '@components/DateField';
-import SignatureModal from '@components/SignatureModal';
+import { KeyboardAvoidingView } from 'react-native';
+import { Platform } from 'react-native';
 
-/* ---------------------- Types ---------------------- */
-
-interface InformedConsentFormProps {
-  patientId?: number;
-  age?: number;
-  studyId?: number;
-}
-
-interface ConsentMasterItem {
-  ICMID: string;
+interface AssessmentQuestion {
+  AssessmentId: string;
+  AssessmentTitle: string;
   StudyId: string;
-  QuestionName: string;
+  AssignmentQuestion: string;
+  Type: string; // "Post" only now
   SortKey: number;
   Status: number;
+  CreatedBy: string;
+  CreatedDate: string;
+  ModifiedBy: string | null;
+  ModifiedDate: string;
+  PMPVRID: string | null;
+  ParticipantId: string | null;
+  ScaleValue: string | null;
+  Notes: string | null;
+  ParticipantResponseDate: string | null;
+  ParticipantResponseModifiedDate: string | null;
 }
 
-/* ---------------------- Helpers ---------------------- */
+interface ApiResponse {
+  ResponseData: AssessmentQuestion[];
+}
 
-// Use same auth path as your working screen: calls go through apiService (Authorization via interceptor)
-const asStr = (v: any) => (v == null ? '' : String(v));
+interface ResponseEntry {
+  PMPVRID: string | null;
+  ScaleValue: string | null;
+  Notes: string | null;
+}
 
-/** CS-0001 format – mirrors your working page approach */
-const formatStudyId = (sid: string | number) => {
-  const s = sid?.toString?.() ?? '';
-  return s.startsWith('CS-') ? s : `CS-${s.padStart(4, '0')}`;
-};
+type ResponsesState = Record<string /*AssessmentId*/, ResponseEntry[]>;
 
-/** API returns raw base64; UI needs a data URI */
-const ensureDataUri = (rawOrUri?: string) => {
-  if (!rawOrUri) return '';
-  return rawOrUri.startsWith('data:image') ? rawOrUri : `data:image/png;base64,${rawOrUri}`;
-};
+export default function PostVR() {
+  const [participantId, setParticipantId] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-/** Server expects data URI on POST (as per your working payload) */
-const signatureForPost = (maybeRawOrUri?: string) => ensureDataUri(maybeRawOrUri);
+  const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
 
-/** DD/MM/YYYY today */
-const todayDDMMYYYY = () => {
-  const d = new Date();
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const yyyy = d.getFullYear();
-  return `${dd}/${mm}/${yyyy}`;
-};
+  const [postQuestions, setPostQuestions] = useState<AssessmentQuestion[]>([]);
+  const [responses, setResponses] = useState<ResponsesState>({});
+  const [randomizationId, setRandomizationId] = useState("");
 
-export default function InformedConsentForm({}: InformedConsentFormProps) {
+  const route = useRoute<RouteProp<RootStackParamList, 'PostVR'>>();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const route = useRoute<RouteProp<RootStackParamList, 'InformedConsent'>>();
-
-  const { patientId, age, studyId } = route.params as {
-    patientId: number;
-    age: number;
-    studyId: number;
-  };
-
-  /* ---------------------- Study & participant ---------------------- */
-  const [studyTitle, setStudyTitle] = useState(
-    'An exploratory study to assess the effectiveness of Virtual Reality assisted Guided Imagery on QoL of cancer patients undergoing chemo-radiation treatment'
-  );
-  const [studyNumber, setStudyNumber] = useState<string | number>(studyId ?? '');
-
-  const [participantName, setParticipantName] = useState('');
-  const [ageInput, setAgeInput] = useState(age ? String(age) : '');
-  const [qualification, setQualification] = useState('');
-
+  const { patientId, age, studyId } = route.params;
   const { userId } = useContext(UserContext);
 
-  /* ---------------------- Consent state ---------------------- */
-  const [PICDID, setPICDID] = useState<string | null>(null);
+  const formatStudyId = (sid: string | number) => {
+    const s = sid.toString();
+    return s.startsWith('CS-') ? s : `CS-${s.padStart(4, '0')}`;
+  };
 
-  // signatures (UI keeps data URIs so they preview fine)
-  const [subjectSignaturePad, setSubjectSignaturePad] = useState('');
-  const [coPISignaturePad, setCoPISignaturePad] = useState('');
-  const [witnessSignaturePad, setWitnessSignaturePad] = useState('');
-
-  const [consentMaster, setConsentMaster] = useState<ConsentMasterItem[]>([]);
-  const [acks, setAcks] = useState<Record<string, boolean>>({});
-  const [agree, setAgree] = useState(false);
-
-  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
-
-  const [signatures, setSignatures] = useState({
-    subjectName: '',
-    subjectDate: todayDDMMYYYY(),
-    coPIName: '',
-    coPIDate: todayDDMMYYYY(),
-    investigatorName: '',
-    witnessName: '',
-    witnessDate: todayDDMMYYYY(),
-  });
-  const setSig = (k: keyof typeof signatures, v: string) =>
-    setSignatures((p) => ({ ...p, [k]: v }));
-
-  const toggleAck = (id: string) => setAcks((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  /* ---------------------- Load consent master (authorized via apiService) ---------------------- */
-  useEffect(() => {
-    apiService
-      .post<{ ResponseData: ConsentMasterItem[] }>('/GetInformedConsentMaster')
-      .then((res) => setConsentMaster(res.data.ResponseData?.sort((a, b) => a.SortKey - b.SortKey) || []))
-      .catch((err) => console.error('Master load error:', err));
-  }, []);
-
-  /* ---------------------- Participant details (authorized) ---------------------- */
-  useFocusEffect(
-    React.useCallback(() => {
-      const fetchParticipantDetails = async () => {
-        try {
-          const res = await apiService.post<any>('/GetParticipantDetails', {
-            ParticipantId: patientId,
-          });
-          const data = res.data?.ResponseData;
-          if (data) {
-            setQualification(data.EducationLevel ?? '');
-            setParticipantName(data.Signature ?? '');
-            setAgeInput(data.Age ? String(data.Age) : '');
-            if (data.Signature) setSubjectSignaturePad(ensureDataUri(data.Signature));
-          }
-        } catch (err) {
-          console.error('Participant details error:', err);
+    const fetchRandomizationId = async (participantIdParam: string) => {
+      try {
+        const response = await apiService.post('/GetParticipantDetails', {
+          ParticipantId: participantIdParam,
+        });
+  
+        console.log('Randomization ID API response:', response.data);
+        const data = response.data?.ResponseData;
+        console.log('Randomization ID data:', data);
+        
+        if (data && data.GroupTypeNumber) {
+          console.log('Setting randomization ID:', data.GroupTypeNumber);
+          setRandomizationId(data.GroupTypeNumber);
+        } else {
+          console.log('No GroupTypeNumber found in response');
         }
-      };
-      if (patientId) fetchParticipantDetails();
-    }, [patientId])
-  );
+      } catch (error) {
+        console.error('Error fetching randomization ID:', error);
+      }
+    };
 
-  /* ---------------------- Remove ack error once all are ticked ---------------------- */
   useEffect(() => {
-    const allInitialed = consentMaster.every((it) => acks[it.ICMID]);
-    if (allInitialed) {
-      setErrors((prev) => {
-        const { allInitialed: _remove, ...rest } = prev;
-        return rest;
-      });
+    if (patientId && studyId !== undefined && studyId !== null) {
+       const pid = patientId.toString();
+      const sid = studyId.toString();
+      setParticipantId(pid);
+      fetchAssessmentQuestions(pid, sid);
+      fetchRandomizationId(pid);
     }
-  }, [acks, consentMaster]);
+  }, [patientId, studyId]);
 
-  /* ---------------------- Validate ---------------------- */
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
+  const fetchAssessmentQuestions = async (participantIdParam: string, studyIdParam: string) => {
+    try {
+      setLoading(true);
+      setError(null);
 
-    const hasAnyInitialed = Object.keys(acks).length > 0 && Object.values(acks).some(Boolean);
-    if (!hasAnyInitialed) newErrors.allInitialed = 'Please initial at least one required section';
-    if (!agree) newErrors.agree = 'Please agree to the terms and conditions';
+      const formattedStudyId = formatStudyId(studyIdParam);
 
-    if (!signatures.coPIName?.trim()) newErrors.coPIName = 'Co-PI name is required';
-    if (!signatures.investigatorName?.trim()) newErrors.investigatorName = 'Study Investigator name is required';
-    if (!signatures.witnessName?.trim()) newErrors.witnessName = 'Witness name is required';
+      const response = await apiService.post<ApiResponse>('/GetParticipantMainPrePostVRAssessment', {
+        ParticipantId: participantIdParam,
+        StudyId: formattedStudyId,
+      });
 
-    if (!signatures.coPIDate?.trim()) newErrors.coPIDate = 'Co-PI signature date is required';
-    if (!signatures.witnessDate?.trim()) newErrors.witnessDate = 'Witness signature date is required';
+      const { ResponseData } = response.data;
 
-    setErrors(newErrors);
+      if (ResponseData && ResponseData.length > 0) {
+        // Only keep Post questions
+        const postQs = ResponseData.filter((q) => q.Type === 'Post' && q.StudyId === formattedStudyId).sort((a, b) => a.SortKey - b.SortKey);
 
-    if (Object.keys(newErrors).length) {
+        setPostQuestions(postQs);
+
+        const groupedResponses: ResponsesState = {};
+
+        ResponseData.forEach((q) => {
+          if (q.Type === 'Post') {
+            if (!groupedResponses[q.AssessmentId]) {
+              groupedResponses[q.AssessmentId] = [];
+            }
+            groupedResponses[q.AssessmentId].push({
+              PMPVRID: q.PMPVRID,
+              ScaleValue: q.ScaleValue,
+              Notes: q.Notes,
+            });
+          }
+        });
+
+        setResponses(groupedResponses);
+      } else {
+        setPostQuestions([]);
+        setResponses({});
+        setError('No post assessment questions found for this participant.');
+      }
+    } catch (err) {
+      console.error('Failed to load assessment questions', err);
+      setError('Failed to load assessment questions. Please try again.');
       Toast.show({
         type: 'error',
-        text1: 'Validation Error',
-        text2: 'Please fill all required fields',
+        text1: 'Error',
+        text2: 'Failed to load assessment data',
         position: 'top',
         topOffset: 50,
       });
-      return false;
+    } finally {
+      setLoading(false);
     }
-    return true;
   };
 
-  /* ---------------------- Clear ---------------------- */
-  const handleClear = () => {
-    setAcks({});
-    setAgree(false);
-    setSignatures({
-      subjectName: '',
-      subjectDate: todayDDMMYYYY(),
-      coPIName: '',
-      coPIDate: todayDDMMYYYY(),
-      investigatorName: '',
-      witnessName: '',
-      witnessDate: todayDDMMYYYY(),
+  const setResponse = (
+    questionId: string,
+    value: string | null,
+    isNotes: boolean = false,
+    index: number = 0
+  ) => {
+    setResponses((prev) => {
+      const questionResponses = prev[questionId] ? [...prev[questionId]] : [];
+      // ensure index exists
+      while (questionResponses.length <= index) {
+        questionResponses.push({ PMPVRID: null, ScaleValue: null, Notes: null });
+      }
+      if (isNotes) {
+        questionResponses[index].Notes = value;
+      } else {
+        questionResponses[index].ScaleValue = value;
+      }
+      const updated = { ...prev, [questionId]: questionResponses };
+      console.log('Updated responses:', updated);
+      return updated;
     });
-    setSubjectSignaturePad('');
-    setCoPISignaturePad('');
-    setWitnessSignaturePad('');
-    setPICDID(null);
-    setErrors({});
+    setValidationErrors((prev) => {
+      if (prev[questionId]) {
+        const newErrors = { ...prev };
+        delete newErrors[questionId];
+        return newErrors;
+      }
+      return prev;
+    });
   };
 
-  /* ---------------------- Save (authorized via apiService) ---------------------- */
-  const handleSubmit = async () => {
-    if (!validateForm()) return;
+  const getQuestionType = (question: string): string => {
+    const lowerQ = question.toLowerCase();
+
+    if (lowerQ.includes('scale of 1-5') || lowerQ.includes('1 = ') || lowerQ.includes('5 = ')) {
+      return 'scale_5';
+    }
+    if (lowerQ.includes('1-10') || lowerQ.includes('10 = excellent')) {
+      return 'scale_10';
+    }
+    if (
+      lowerQ.includes('did you') ||
+      lowerQ.includes('were you') ||
+      lowerQ.includes('would you') ||
+      lowerQ.includes('do you') ||
+      lowerQ.includes('has the') ||
+      lowerQ.includes('have you')
+    ) {
+      return 'yes_no';
+    }
+    if (lowerQ.includes('comfort') && !lowerQ.includes('scale')) {
+      return 'comfort_level';
+    }
+    if (lowerQ.includes('engaging') && !lowerQ.includes('scale')) {
+      return 'engagement_level';
+    }
+    return 'text';
+  };
+
+  const renderScale = (questionId: string, max: number, index: number) => {
+    const value = responses[questionId]?.[index]?.ScaleValue;
+    return (
+      <View className="bg-white border border-[#e6eeeb] rounded-xl shadow-sm overflow-hidden">
+        <View className="flex-row">
+          {Array.from({ length: max }, (_, i) => i + 1).map((v, idx) => (
+            <React.Fragment key={v}>
+              <Pressable
+                onPress={() => setResponse(questionId, v.toString(), false, index)}
+                className={`flex-1 py-3 items-center justify-center ${
+                  value === v.toString() ? 'bg-[#4FC264]' : 'bg-white'
+                }`}
+              >
+                <Text
+                  className={`font-medium text-sm ${
+                    value === v.toString() ? 'text-white' : 'text-[#4b5f5a]'
+                  }`}
+                >
+                  {v}
+                </Text>
+              </Pressable>
+              {idx < max - 1 && <View className="w-px bg-[#e6eeeb]" />}
+            </React.Fragment>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderYesNo = (questionId: string, index: number) => {
+    const value = responses[questionId]?.[index]?.ScaleValue;
+    return (
+      <View className="flex-row gap-2">
+        <Pressable
+          onPress={() => setResponse(questionId, 'Yes', false, index)}
+          className={`w-1/2 flex-row items-center justify-center rounded-full py-3 px-2 ${
+            value === 'Yes' ? 'bg-[#4FC264]' : 'bg-[#EBF6D6]'
+          }`}
+        >
+          <Text className={`text-lg mr-1 ${value === 'Yes' ? 'text-white' : 'text-[#2c4a43]'}`}>✅</Text>
+          <Text className={`font-medium text-sm ${value === 'Yes' ? 'text-white' : 'text-[#2c4a43]'}`}>
+            Yes
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => setResponse(questionId, 'No', false, index)}
+          className={`w-1/2 flex-row items-center justify-center rounded-full py-3 px-2 ${
+            value === 'No' ? 'bg-[#4FC264]' : 'bg-[#EBF6D6]'
+          }`}
+        >
+          <Text className={`text-lg mr-1 ${value === 'No' ? 'text-white' : 'text-[#2c4a43]'}`}>❌</Text>
+          <Text className={`font-medium text-sm ${value === 'No' ? 'text-white' : 'text-[#2c4a43]'}`}>No</Text>
+        </Pressable>
+      </View>
+    );
+  };
+
+  const renderMultipleChoice = (questionId: string, options: string[], index: number) => {
+    const value = responses[questionId]?.[index]?.ScaleValue;
+    return (
+      <View className="bg-white border border-[#e6eeeb] rounded-xl shadow-sm overflow-hidden">
+        <View className="flex-row">
+          {options.map((option, idx) => (
+            <React.Fragment key={option}>
+              <Pressable
+                onPress={() => setResponse(questionId, option, false, index)}
+                className={`flex-1 py-3 items-center justify-center ${
+                  value === option ? 'bg-[#4FC264]' : 'bg-white'
+                }`}
+              >
+                <Text className={`font-medium text-sm text-center ${value === option ? 'text-white' : 'text-[#4b5f5a]'}`}>
+                  {option}
+                </Text>
+              </Pressable>
+              {idx < options.length - 1 && <View className="w-px bg-[#e6eeeb]" />}
+            </React.Fragment>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderQuestion = (question: AssessmentQuestion) => {
+    const questionType = getQuestionType(question.AssignmentQuestion);
+    const questionId = question.AssessmentId;
+    const index = 0;
+
+    const hasError = validationErrors[questionId];
+
+    const scaleValue = responses[questionId]?.[index]?.ScaleValue || '';
+    const notesValue = responses[questionId]?.[index]?.Notes || '';
+
+    return (
+      <View key={questionId} className="mt-3">
+        <Text  className={`text-md font-medium  mb-2 ${
+          hasError ? 'text-red-600 font-semibold' : 'text-[#2c4a43]'
+          }`}
+        >
+          {question.AssessmentTitle}
+        </Text>
+        <Text className="text-base text-gray-600 mb-2">{question.AssignmentQuestion}</Text>
+
+        {questionType === 'scale_5' && renderScale(questionId, 5, index)}
+        {questionType === 'scale_10' && (
+          <Field
+            label="Rating (1-10)"
+            placeholder="Rate from 1-10"
+            value={scaleValue.toString()}
+            onChangeText={(value) => setResponse(questionId, value, false, index)}
+            keyboardType="number-pad"
+          />
+        )}
+        {questionType === 'yes_no' && renderYesNo(questionId, index)}
+        {questionType === 'comfort_level' &&
+          renderMultipleChoice(questionId, [
+            'Very Comfortable',
+            'Somewhat Comfortable',
+            'Neutral',
+            'Uncomfortable',
+            'Very Uncomfortable',
+          ], index)}
+        {questionType === 'engagement_level' &&
+          renderMultipleChoice(questionId, [
+            'Very Engaging',
+            'Somewhat Engaging',
+            'Neutral',
+            'Not Very Engaging',
+            'Not Engaging at All',
+          ], index)}
+        {questionType === 'text' && (
+          <Field
+            label="Response"
+            placeholder="Your response..."
+            value={notesValue}
+            onChangeText={(value) => setResponse(questionId, value, true, index)}
+            multiline
+            numberOfLines={3}
+          />
+        )}
+
+        {(scaleValue === 'Yes' || scaleValue === 'No') && questionType === 'yes_no' && (
+          <View className="mt-2">
+            <Field
+              label="Additional notes (optional)"
+              placeholder="Please provide details..."
+              value={notesValue}
+              onChangeText={(value) => setResponse(questionId, value, true, index)}
+              multiline
+              numberOfLines={2}
+            />
+          </View>
+        )}
+      </View>
+    );
+  };
+
+  const validateResponses = (): boolean => {
+    if (postQuestions.length === 0) return false;
+
+    const newErrors: Record<string, boolean> = {};
+
+    postQuestions.forEach((question) => {
+      const questionId = question.AssessmentId;
+      const entries = responses[questionId] || [];
+
+      const noneFilled = entries.every(
+        (entry) =>
+          (entry.ScaleValue === null || entry.ScaleValue === '') &&
+          (entry.Notes === null || entry.Notes === '')
+      );
+
+      if (noneFilled) {
+        newErrors[questionId] = true;
+      }
+    });
+
+    setValidationErrors(newErrors);
+
+    return Object.keys(newErrors).length === 0;
+  };
+
+
+  const handleValidate = () => {
+    // if (Object.keys(responses).length === 0) {
+    //   Toast.show({
+    //     type: 'error',
+    //     text1: 'Validation Error',
+    //     text2: 'No responses entered. Please fill the form.',
+    //     position: 'top',
+    //     topOffset: 50,
+    //   });
+    //   setValidationErrors({});
+    //   return;
+    // }
+
+    const passed = validateResponses();
+
+    if (passed) {
+      Toast.show({
+        type: 'success',
+        text1: 'Validation Passed',
+        text2: 'All required fields are filled',
+        position: 'top',
+        topOffset: 50,
+      });
+    } else {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'Please fill all required fields.',
+        position: 'top',
+        topOffset: 50,
+      });
+    }
+  };
+
+
+  const handleSave = async () => {
+
+    const passedValidation = validateResponses();
+
+    if (!passedValidation) {
+      Toast.show({
+        type: 'error',
+        text1: 'Validation Error',
+        text2: 'All fields are required to save.',
+        position: 'top',
+        topOffset: 50,
+      });
+      return;
+    }
 
     try {
+      setSaving(true);
+
       const formattedStudyId = formatStudyId(studyId ?? '0001');
-      const questionIds = Object.keys(acks).filter((qid) => acks[qid]);
+
+      const questionData = Object.entries(responses)
+        .flatMap(([questionId, entries]) =>
+          entries
+            .map((entry) => ({
+              PMPVRID: entry.PMPVRID,
+              AssessmentQuestionId: questionId,
+              ScaleValue: entry.ScaleValue === '' ? null : entry.ScaleValue,
+              Notes: entry.Notes === '' ? null : entry.Notes,
+              ParticipantId: participantId,
+              StudyId: formattedStudyId,
+              Status: 1,
+              CreatedBy: userId,
+              ModifiedBy: userId,
+            }))
+            .filter((item) => item.ScaleValue !== null || item.Notes !== null)
+        );
 
       const payload = {
-        PICDID: PICDID || '',
+        ParticipantId: participantId,
         StudyId: formattedStudyId,
-        ParticipantId: asStr(patientId),
-        QuestionId: questionIds.join(','),
-        Response: 1,
-        SubjectSignatoryName: signatures.subjectName || 'John Doe',
-        SubjectSignature: signatureForPost(subjectSignaturePad),
-        SubjectSignatureDate: formatDate(signatures.subjectDate) || '2024-09-10',
-        CoPrincipalInvestigatorSignatoryName: signatures.coPIName || 'Dr. Sarah Smith',
-        CoPrincipalInvestigatorSignature: signatureForPost(coPISignaturePad),
-        CoPrincipalInvestigatorDate: formatDate(signatures.coPIDate) || '2024-09-10',
-        StudyInvestigatorName: signatures.investigatorName || 'Dr. Michael Johnson',
-        WitnessSignature: signatureForPost(witnessSignaturePad),
-        WitnessName: signatures.witnessName || 'Jane Witness',
-        WitnessDate: formatDate(signatures.witnessDate) || '2024-09-10',
+        QuestionData: questionData,
         Status: 1,
-        CreatedBy: asStr(userId),
+        CreatedBy: userId,
+        ModifiedBy: userId,
       };
 
-      // Authorization header comes from apiService interceptor (same as your working screen)
-      const res = await apiService.post('/AddUpdateParticipantInformedConsent', payload);
+      console.log('Saving Assessment Payload:', payload);
 
-      if (res?.data) {
+      const isAdd = questionData.some((q) => q.PMPVRID === null);
+
+      const response = await apiService.post('/AddUpdateParticipantMainPrePostVRAssessment', payload);
+
+      if (response.status === 200) {
         Toast.show({
           type: 'success',
-          text1: PICDID ? 'Updated Successfully' : 'Added Successfully',
-          text2: 'Consent form submitted successfully',
+           text1: isAdd ? 'Added Successfully' : 'Updated Successfully',
+          text2: isAdd ? 'Assessment added successfully!' : 'Assessment updated successfully!',
           position: 'top',
           topOffset: 50,
           visibilityTime: 1000,
           onHide: () => navigation.goBack(),
         });
+      
       } else {
-        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to save consent form' });
+        Toast.show({
+          type: 'error',
+          text1: 'Error',
+          text2: 'Something went wrong. Please try again.',
+          position: 'top',
+          topOffset: 50,
+        });
       }
-    } catch (error: any) {
-      console.error('❌ Save error', error?.response?.data || error);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      console.error('Error saving assessment:', errorMessage);
       Toast.show({
         type: 'error',
         text1: 'Error',
-        text2: error?.response?.data?.message || error?.message || 'Something went wrong. Please try again.',
+        text2: `Failed to save assessment: ${errorMessage}`,
+        position: 'top',
+        topOffset: 50,
       });
+    } finally {
+      setSaving(false);
     }
   };
 
-  /* ---------------------- Load existing consent (authorized) ---------------------- */
-  useEffect(() => {
-    const fetchConsent = async () => {
-      try {
-        // Your confirmed working pattern: POST with ParticipantId only
-        const consentRes = await apiService.post<any>('/GetParticipantInformedConsent', {
-          ParticipantId: asStr(patientId),
-        });
+  const handleClear = () => {
+    setResponses({});
+    setValidationErrors({});
+  };
 
-        const c = consentRes?.data?.ResponseData?.[0];
-        if (!c) return;
+  if (loading) {
+    return (
+      <View className="flex-1 justify-center items-center bg-gray-100">
+        <ActivityIndicator size="large" color="#4FC264" />
+        <Text className="text-gray-600 mt-4">Loading assessment questions...</Text>
+      </View>
+    );
+  }
 
-        setPICDID(c.PICDID || null);
-
-        // Acks
-        const qids: string[] = Array.isArray(c.QuestionId) ? c.QuestionId : [c.QuestionId];
-        const savedAcks: Record<string, boolean> = {};
-        qids.filter(Boolean).forEach((qid) => (savedAcks[qid] = true));
-        setAcks(savedAcks);
-
-        setAgree(c.Response === 1);
-
-        // Names/Dates
-        setSignatures({
-          subjectName: c.SubjectSignatoryName || '',
-          subjectDate: c.SubjectSignatureDate ? formatDateDDMMYYYY(c.SubjectSignatureDate) : todayDDMMYYYY(),
-          coPIName: c.CoPrincipalInvestigatorSignatoryName || '',
-          coPIDate: c.CoPrincipalInvestigatorDate ? formatDateDDMMYYYY(c.CoPrincipalInvestigatorDate) : todayDDMMYYYY(),
-          investigatorName: c.StudyInvestigatorName || '',
-          witnessName: c.WitnessName || '',
-          witnessDate: c.WitnessDate ? formatDateDDMMYYYY(c.WitnessDate) : todayDDMMYYYY(),
-        });
-
-        // Signatures (GET returns raw base64 → make data URIs for UI)
-        setSubjectSignaturePad(ensureDataUri(c.SubjectSignature || ''));
-        setCoPISignaturePad(ensureDataUri(c.CoPrincipalInvestigatorSignature || ''));
-        setWitnessSignaturePad(ensureDataUri(c.WitnessSignature || ''));
-
-        // Optional info
-        if (c.ParticipantName) setParticipantName(c.ParticipantName);
-        if (c.Qualification) setQualification(c.Qualification);
-        if (c.Age) setAgeInput(String(c.Age));
-        if (c.StudyTitle) setStudyTitle(c.StudyTitle);
-        if (c.StudyNumber) setStudyNumber(c.StudyNumber);
-      } catch (err) {
-        console.error('❌ Fetch consent error:', err);
-        Toast.show({ type: 'error', text1: 'Error', text2: 'Failed to load consent data' });
-      }
-    };
-
-    fetchConsent();
-  }, [patientId]);
-
-  /* ============================ UI ============================ */
   return (
     <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
-    >
-      <View className="px-4 pb-1" style={{ paddingTop: 8 }}>
-        <View className="bg-white border-b-2 border-gray-300 rounded-xl p-6 flex-row justify-between items-center shadow-sm">
-          <Text className="text-lg font-bold text-green-600">Participant ID: {patientId}</Text>
-          <Text className="text-base font-semibold text-green-600">Study ID: {studyId || 'N/A'}</Text>
-          <Text className="text-base font-semibold text-gray-700">Age: {age || 'Not specified'}</Text>
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 100 : 0}
+      >
+      {/* Header */}
+      <View
+        className="px-4"
+        style={{ paddingTop: 8, paddingBottom: '0.25rem' }}
+      >
+          <View className="bg-white border-b-2 border-gray-300 rounded-xl p-6 flex-row justify-between items-center shadow-sm">
+          <Text className="text-lg font-bold text-green-600">Participant ID: {participantId}</Text>
+           <Text className="text-base font-semibold text-green-600">
+            Randomization ID: {randomizationId || "N/A"}
+          </Text>
+          <Text className="text-base font-semibold text-gray-700">Age: {age ?? 'Not specified'}</Text>
         </View>
       </View>
 
-      <ScrollView className="flex-1 px-4 bg-bg pb-[400px]">
-        {/* Study Details */}
-        <FormCard icon="A" title="Study Details">
-          <View className="mb-4 mt-4">
-            <Text className="text-md text-[#2c4a43] font-medium mb-2">Study Title</Text>
-            <View className="bg-white border border-[#e6eeeb] rounded-2xl p-4 min-h-[96px]">
-              <TextInput
-                value={studyTitle}
-                onChangeText={setStudyTitle}
-                multiline
-                textAlignVertical="top"
-                placeholder="Enter study title"
-                placeholderTextColor="#9ca3af"
-                className="text-base text-[#0b1f1c]"
-              />
-            </View>
-          </View>
-
-          <View className="grid md:flex md:flex-row md:space-x-4">
-            <View className="flex-1 mb-4">
-              <Text className="text-md font-medium text-[#2c4a43]  mb-2">Study Number</Text>
-              <View className="bg-white border border-[#e6eeeb] rounded-2xl p-3">
-                <TextInput
-                  value={String(studyNumber ?? '')}
-                  onChangeText={setStudyNumber as any}
-                  placeholder="Auto / Enter study number"
-                  placeholderTextColor="#9ca3af"
-                  className="text-base text-[#0b1f1c]"
-                />
-              </View>
-            </View>
-          </View>
-        </FormCard>
-
-        {/* Participant Information */}
-        <FormCard icon="B" title="Participant Information">
-          <View className="flex-row space-x-4 mb-4 mt-4">
-            <LabeledInput label="Participant ID" value={patientId ? String(patientId) : ''} editable={false} />
-          </View>
-
-          <View className="flex-row space-x-4 mb-4">
-            <View className="flex-[0.6]">
-              <Text className="text-md font-medium text-[#2c4a43]  mb-2">Age</Text>
-              <InputShell>
-                <TextInput
-                  value={ageInput}
-                  onChangeText={setAgeInput}
-                  placeholder="Age"
-                  placeholderTextColor="#9ca3af"
-                  keyboardType="numeric"
-                  className="text-base text-[#0b1f1c]"
-                  editable={false}
-                />
-              </InputShell>
-            </View>
-
+      <ScrollView className="flex-1 p-4 bg-bg pb-[400px]" style={{ paddingTop: '0.1rem' }}>
+        {/* Main Assessment Card */}
+        <FormCard icon="J" title="Post‑VR Assessment & Questionnaires">
+          <View className="flex-row gap-3 mt-4">
             <View className="flex-1">
-              <LabeledInput
-                label="Qualification"
-                placeholder="Education / Qualification"
-                value={qualification}
-                editable={false}
-              />
+              <Field label="Participant ID" placeholder="e.g., PID-0234" value={participantId} onChangeText={setParticipantId} editable={false} />
+            </View>
+            <View className="flex-1">
+              <DateField label="Date" value={date} onChange={setDate} />
             </View>
           </View>
         </FormCard>
 
-        {/* Acknowledgements */}
-        <FormCard icon="C" title="Consent Acknowledgements (Initial each) *" error={!!errors.allInitialed}>
-          {consentMaster.map((s, idx) => (
-            <View key={s.ICMID} className="mb-3 mt-4">
-              <View className="bg-white border border-[#e6eeeb] rounded-2xl p-3">
-                <View className="flex-row items-start">
-                  <View className="w-8 mr-3">
-                    <View className="w-8 h-8 rounded-md bg-[#e7f7f0] border border-[#cfe0db] items-center justify-center">
-                      <Text className="text-[#0a6f55] font-extrabold">{['i', 'ii', 'iii', 'iv'][idx] || idx + 1}</Text>
-                    </View>
-                  </View>
-                  <View className="flex-1 pr-3">
-                    <Text className="text-[15px] leading-6 text-[#0b1f1c]">{s.QuestionName}</Text>
-                  </View>
-                  <Pressable
-                    onPress={() => toggleAck(s.ICMID)}
-                    className={`h-10 px-4 rounded-lg border-2 border-dashed items-center justify-center ${
-                      acks[s.ICMID] ? 'border-[#0ea06c] bg-[#0ea06c]/10' : 'border-[#cfe0db]'
-                    }`}
-                  >
-                    <Text
-                      className={`text-[12px] font-semibold ${
-                        acks[s.ICMID] ? 'text-[#0ea06c]' : 'text-[#6b7a77]'
-                      }`}
-                    >
-                      {acks[s.ICMID] ? '✓ Initialed' : 'Initial'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </View>
-            </View>
-          ))}
-
-          <View className="mt-3">
-            <View className="flex-row items-center">
-              <Pressable
-                onPress={() => {
-                  setAgree((v) => {
-                    const nv = !v;
-                    if (nv) setErrors((p) => ({ ...p, agree: undefined }));
-                    return nv;
-                  });
-                }}
-                className={`w-7 h-7 mr-3 rounded-[6px] border-2 items-center justify-center  ${
-                  agree ? 'bg-[#0ea06c] border-[#0ea06c]' : 'border-[#cfe0db]'
-                }`}
-              >
-                {agree && <Text className="text-white text-[10px]">✓</Text>}
-              </Pressable>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text className={`text-sm font-medium ${errors.agree ? 'text-red-500' : 'text-[#0b1f1c]'}`}>
-                  I agree to voluntarily take part in the above study.
-                </Text>
-                <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>*</Text>
-              </View>
-            </View>
+        {/* Error State */}
+        {error && (
+          <View className="bg-red-50 rounded-lg p-4 shadow-md mb-4">
+            <Text className="text-red-600 text-center font-semibold">{error}</Text>
+            <Pressable onPress={() => fetchAssessmentQuestions(participantId, studyId ? studyId.toString() : '0001')} className="mt-2">
+              <Text className="text-blue-600 text-center font-semibold">Try Again</Text>
+            </Pressable>
           </View>
-        </FormCard>
+        )}
 
-        {/* Signatures */}
-        <FormCard icon="D" title="Signatures">
-          <View className="space-y-4 mt-4">
-            <View className="flex-row space-x-4">
-              <SignatureBlock
-                title="Signature (or Thumb impression) of the Subject"
-                nameLabel="Signatory’s Name"
-                hideName
-                error={{
-                  subjectName: errors.subjectName,
-                  subjectSignaturePad: errors.subjectSignaturePad,
-                }}
-                nameValue={signatures.subjectName}
-                onChangeName={(v) => setSig('subjectName', v)}
-                signatureValue={subjectSignaturePad}
-                onChangeSignature={(v) => setSubjectSignaturePad(ensureDataUri(v))}
-                dateValue={signatures.subjectDate}
-                onChangeDate={(v) => setSig('subjectDate', v)}
-              />
+        {/* Post-VR Questions */}
+        {postQuestions.length > 0 && (
+          <FormCard icon="B" title="Post-VR Assessment">{postQuestions.map(renderQuestion)}</FormCard>
+        )}
 
-              <SignatureBlock
-                title="Co-Principal Investigator Signature"
-                nameLabel="Co-PI Name"
-                nameValue={signatures.coPIName}
-                error={{
-                  subjectName: errors.coPIName,
-                  subjectSignaturePad: errors.coPISignaturePad,
-                }}
-                onChangeName={(v) => setSig('coPIName', v)}
-                signatureValue={coPISignaturePad}
-                onChangeSignature={(v) => setCoPISignaturePad(ensureDataUri(v))}
-                dateValue={signatures.coPIDate}
-                onChangeDate={(v) => setSig('coPIDate', v)}
-              />
-            </View>
-
-            <View className="flex-row space-x-4">
-              <InvestigatorNameBlock
-                value={signatures.investigatorName}
-                onChange={(v) => setSig('investigatorName', v)}
-                error={errors.investigatorName}
-              />
-
-              <SignatureBlock
-                title="Witness Signature"
-                nameLabel="Name of the Witness"
-                nameValue={signatures.witnessName}
-                error={{
-                  subjectName: errors.witnessName,
-                  subjectSignaturePad: errors.witnessSignaturePad,
-                }}
-                onChangeName={(v) => setSig('witnessName', v)}
-                signatureValue={witnessSignaturePad}
-                onChangeSignature={(v) => setWitnessSignaturePad(ensureDataUri(v))}
-                dateValue={signatures.witnessDate}
-                onChangeDate={(v) => setSig('witnessDate', v)}
-              />
-            </View>
-
-            <Text className="text-[12px] text-[#6b7a77] italic">
-              Note: Make 2 copies of the Subject Information Sheet and Consent Form — one for the Principal
-              Investigator and one for the patient.
+        {/* Instructions */}
+        {!error && postQuestions.length > 0 && (
+          <View className="bg-blue-50 rounded-lg p-4 shadow-md mb-4">
+            <Text className="font-semibold text-sm text-blue-800 mb-2">Instructions:</Text>
+            <Text className="text-sm text-blue-700">
+              • For scale questions (1-5): 1 = Lowest/Worst, 5 = Highest/Best{'\n'}
+              • For scale questions (1-10): 1 = Very Bad, 10 = Excellent{'\n'}
+              • Answer all applicable questions for complete assessment
             </Text>
           </View>
-        </FormCard>
+        )}
 
-        <View style={{ height: 100 }} />
+        <View style={{ height: 150 }} />
       </ScrollView>
 
       <BottomBar>
-        <Btn variant="light" onPress={handleClear}>
-          Clear
-        </Btn>
-        <Btn onPress={handleSubmit} className="font-bold text-base">
-          Save & Close
-        </Btn>
+        <Btn variant="light" onPress={handleValidate}>Validate</Btn>
+        <Btn variant="light" onPress={handleClear}>Clear</Btn>
+        <Btn onPress={handleSave} disabled={saving || loading}>{saving ? 'Saving...' : 'Save & Close'}</Btn>
       </BottomBar>
     </KeyboardAvoidingView>
-  );
-}
-
-/* --------------------- Small UI helpers ---------------------- */
-
-function LabeledInput({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  editable = true,
-}: {
-  label: string;
-  value: string;
-  onChangeText?: (t: string) => void;
-  placeholder?: string;
-  editable?: boolean;
-}) {
-  return (
-    <View className="flex-1">
-      <Text className="text-md font-medium text-[#2c4a43] mb-2">{label}</Text>
-      <InputShell>
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          editable={editable}
-          placeholderTextColor="#9ca3af"
-          className="text-base text-[#0b1f1c]"
-        />
-      </InputShell>
-    </View>
-  );
-}
-
-function InputShell({ children }: { children: React.ReactNode }) {
-  return <View className="bg-white border border-[#e6eeeb] rounded-2xl px-3 py-3">{children}</View>;
-}
-
-type SignatureBlockProps = {
-  title: string;
-  nameLabel: string;
-  nameValue: string;
-  dateValue: string;
-  signatureValue: string;
-  error?: {
-    subjectName?: string;
-    subjectSignaturePad?: string;
-  };
-  hideName?: boolean;
-  onChangeName: (v: string) => void;
-  onChangeDate: (v: string) => void;
-  onChangeSignature: (v: string) => void;
-};
-
-export function SignatureBlock({
-  title,
-  nameLabel,
-  error,
-  nameValue,
-  hideName,
-  onChangeName,
-  dateValue,
-  onChangeDate,
-  signatureValue,
-  onChangeSignature,
-}: SignatureBlockProps) {
-  const [nameError, setNameError] = useState(!!error?.subjectName && !hideName);
-  const [sigError, setSigError] = useState(!!error?.subjectSignaturePad);
-  const [modalVisible, setModalVisible] = useState(false);
-
-  useEffect(() => {
-    if (!hideName) setNameError(!!(error?.subjectName && !nameValue?.trim()));
-    else setNameError(false);
-  }, [nameValue, error?.subjectName, hideName]);
-
-  useEffect(() => {
-    setSigError(!!(error?.subjectSignaturePad && !signatureValue?.trim()));
-  }, [signatureValue, error?.subjectSignaturePad]);
-
-  return (
-    <View className="flex-1 bg-white border border-[#e6eeeb] rounded-2xl p-4">
-      <Text className={`text-md font-medium mb-3 ${sigError ? 'text-red-500' : 'text-[#2c4a43]'}`}>{title}</Text>
-
-      <TouchableOpacity
-        onPress={() => setModalVisible(true)}
-        style={{
-          minHeight: 96,
-          borderWidth: 2,
-          borderColor: '#cfe0db',
-          borderStyle: 'dashed',
-          borderRadius: 12,
-          backgroundColor: '#fafdfb',
-          justifyContent: 'center',
-          alignItems: 'center',
-          marginBottom: 12,
-        }}
-      >
-        <Text style={{ color: signatureValue ? '#0b1f1c' : '#90a29d' }}>
-          {signatureValue ? '✓ Signature Added' : 'Tap to Sign'}
-        </Text>
-      </TouchableOpacity>
-
-      <SignatureModal
-        label={title}
-        visible={modalVisible}
-        onClose={() => setModalVisible(false)}
-        signatureData={signatureValue}
-        setSignatureData={onChangeSignature}
-      />
-
-      <View className="flex-row space-x-4">
-        {!hideName && (
-          <View className="flex-1">
-            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-              <Text className={`text-md font-base mb-2 ${nameError ? 'text-red-500' : 'text-[#2c4a43]'}`}>
-                {nameLabel}
-              </Text>
-              <Text style={{ color: 'red', fontSize: 14, fontWeight: '500', marginLeft: 2 }}>*</Text>
-            </View>
-            <TextInput
-              value={nameValue}
-              onChangeText={onChangeName}
-              placeholder="Enter name"
-              placeholderTextColor="#9ca3af"
-              className={`text-sm text-[#0b1f1c] border rounded-xl px-3 py-3 border-[#dce9e4] ${
-                nameError ? 'border-red-500' : ''
-              }`}
-              style={{ lineHeight: 20, minHeight: 44, textAlignVertical: 'center' }}
-              multiline={false}
-              numberOfLines={1}
-            />
-          </View>
-        )}
-        <View className="flex-1">
-          <DateField label="Date" value={dateValue} onChange={onChangeDate} mode="date" />
-        </View>
-      </View>
-    </View>
-  );
-}
-
-export function InvestigatorNameBlock({
-  value,
-  onChange,
-  error,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  error?: string;
-}) {
-  const [showError, setShowError] = useState(!!error);
-
-  useEffect(() => {
-    if (value?.trim()) setShowError(false);
-    else if (error) setShowError(true);
-  }, [value, error]);
-
-  return (
-    <View className="flex-1 bg-white border border-[#e6eeeb] rounded-2xl p-4">
-      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-        <Text className={`text-md font-medium mb-3 ${showError ? 'text-red-500' : 'text-[#2c4a43]'}`}>
-          Study Investigator's Name
-        </Text>
-        <Text style={{ color: 'red', fontSize: 16, fontWeight: '500', marginLeft: 2 }}>*</Text>
-      </View>
-
-      <TextInput
-        value={value}
-        onChangeText={onChange}
-        placeholder="Enter name"
-        placeholderTextColor="#9ca3af"
-        className={`text-sm text-[#0b1f1c] border rounded-xl px-3 py-3 border-[#dce9e4] ${
-          showError ? 'border-red-500' : ''
-        }`}
-        style={{ lineHeight: 20, minHeight: 44, textAlignVertical: 'center' }}
-        multiline={false}
-        numberOfLines={1}
-      />
-    </View>
   );
 }
