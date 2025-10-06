@@ -190,7 +190,7 @@ export default function InformedConsentForm({}: InformedConsentFormProps) {
     return true;
   };
 
-  /* ---------------------- Clear ---------------------- */
+  /* ----------- Clear ------------ */
   const handleClear = () => {
     setAcks({});
     setAgree(false);
