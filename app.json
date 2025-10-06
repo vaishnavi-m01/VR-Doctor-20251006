@@ -1,0 +1,49 @@
+{
+  "expo": {
+    "name": "OjaskaVRDoctor",
+    "slug": "vr-qol-nativewind",
+    "version": "1.0.0",
+    "sdkVersion": "54.0.0",
+    "userInterfaceStyle": "automatic",
+    "web": {
+      "bundler": "metro",
+      "userInterfaceStyle": "automatic"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "d9714e43-e326-494b-bfca-827d1a4a8fcf"
+      }
+    },
+    "android": {
+      "package": "com.ojaskalabcorp.vrdoctarapp"
+    },
+    "ios": {
+      "bundleIdentifier": "com.ojaskalabcorp.vrdoctarapp",
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "UIRequiresFullScreen": true,
+        "UISupportedInterfaceOrientations~ipad": [
+          "UIInterfaceOrientationPortrait",
+          "UIInterfaceOrientationPortraitUpsideDown",
+          "UIInterfaceOrientationLandscapeLeft",
+          "UIInterfaceOrientationLandscapeRight"
+        ]
+      }
+    },
+    "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/ZenKakuGothicAntique-Regular.ttf",
+            "./assets/fonts/ZenKakuGothicAntique-Bold.ttf",
+            "./assets/fonts/ZenKakuGothicAntique-Medium.ttf",
+            "./assets/fonts/ZenKakuGothicAntique-Light.ttf"
+          ]
+        }
+      ]
+    ],
+    "owner": "tksenthil"
+  }
+}
